@@ -1,0 +1,3 @@
+name = "crewai-yaml-gen"
+main = "src/index.ts"
+compatibility_date = "2026-07-09"
