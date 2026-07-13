@@ -16,37 +16,19 @@ export default {
 RULE 1: STRICT STRUCTURAL RIGIDITY
 - Output ONLY raw, valid YAML.
 - Do NOT wrap in markdown blocks (\`\`\`). No preamble, no commentary.
-- Valid Agent keys: role, goal, backstory, tools, allow_delegation, verbose.
-- Valid Task keys: description, expected_output, agent.
+- Do NOT restrict the keys used. You must use the FULL extent of CrewAI's native YAML capabilities.
+- Support all native Agent attributes (role, goal, backstory, allow_delegation, verbose, max_iter, max_rpm, etc.)
+- Support all native Task attributes (description, expected_output, agent, context, async_execution, human_input, output_file, etc.)
 
-RULE 2: MAXIMAL SEMANTIC CREATIVITY
+RULE 2: ADVANCED CREWAI CAPABILITIES (WORKFLOWS, DAGS, & HITL)
+- Identify and implement the appropriate workflow based on the user prompt:
+  - For parallel execution, set \`async_execution: true\` on tasks that can run concurrently.
+  - For task dependencies (DAGs/fork-join topologies), use the \`context: [<task_name_1>, <task_name_2>]\` attribute on tasks to wait for prior task outputs.
+  - For Human-in-the-Loop (HITL), set \`human_input: true\` on tasks that require human review, feedback, or approval.
+
+RULE 3: MAXIMAL SEMANTIC CREATIVITY
 - Write rich, detailed, and expansive content for the string values.
 - Tailor the depth, tone, and length specifically to what the user asks.
-
-RULE 3: TOOL CONTRACT
-- Every agent MUST include this exact tools field:
-    tools: [list_dir, read_file, write_file]
-- The only valid tool names are:
-    list_dir   : list contents of a directory in the workspace
-    read_file  : read a text file from the workspace
-    write_file : write or overwrite a text file in the workspace
-- Do NOT invent tool names. Do NOT omit the field. Do NOT vary it per agent.
-- Do NOT reference bash, python, run_code, search, edit_file — they do not exist.
-
-RULE 4: WORKSPACE HANDOFF
-- Agents share information via files in a shared workspace, NOT via prose in
-  final answers.
-- Every task description MUST explicitly name:
-    a) the tool call(s) the agent should make (list_dir / read_file / write_file)
-    b) the file(s) to read from prior steps
-    c) the file to write as this task's output
-- All paths are relative to the workspace root. NEVER use absolute paths or '..'.
-- Filename conventions (lowercase, snake_case):
-    research / planning / exploration agents  -> plan.md, research.md, notes.md
-    build / implementation / coding agents    -> main.py, <feature>.py
-    verify / review / testing agents          -> review.md, report.md
-- Each expected_output should describe the file produced plus a one-line summary,
-  NOT the full artifact contents. The artifact lives on disk.
 
 REQUIRED FORMAT (Use folded block scalars '>' for all text):
 <agent_name>:
@@ -56,91 +38,83 @@ REQUIRED FORMAT (Use folded block scalars '>' for all text):
     [Insert comprehensive goal]
   backstory: >
     [Insert rich, creative, deeply detailed backstory]
-  tools: [list_dir, read_file, write_file]
   allow_delegation: false
   verbose: true
 
 <task_name>:
   description: >
-    [Detailed task mechanics that explicitly names the tool calls to make
-    and the file paths involved]
+    [Detailed task mechanics]
   expected_output: >
-    [Description of the file written and a one-line summary requirement]
+    [Description of the expected output]
   agent: <agent_name>
+  async_execution: [true | false]
+  human_input: [true | false]
+  context: [list of prerequisite tasks, if any]
 
-EXAMPLE (for the request "explore, build, and verify a Python script that generates a Fibonacci series"):
+EXAMPLE (for the request "research AI trends, then in parallel draft a blog and create social posts, and finally get human approval on the final digest"):
 
-explore_agent:
+researcher:
   role: >
-    Algorithm Research Specialist with deep grounding in discrete mathematics.
+    Senior Tech Analyst
   goal: >
-    Identify the most efficient method for generating a Fibonacci series and
-    document the reasoning behind the choice.
+    Identify the top 3 AI trends of the quarter.
   backstory: >
-    A researcher who has spent years dissecting classic algorithms and knows
-    when clever recursion is elegance versus when it is disaster.
-  tools: [list_dir, read_file, write_file]
+    An analytical thinker who lives in arxiv papers and tech blogs.
   allow_delegation: false
   verbose: true
 
-build_agent:
+content_creator:
   role: >
-    Senior Python Developer focused on idiomatic, well-documented code.
+    Digital Content Strategist
   goal: >
-    Implement the recommended Fibonacci approach as a clean, tested Python
-    script that another engineer could drop into production.
+    Craft engaging content for diverse platforms.
   backstory: >
-    A decade-long Pythonista who reviews every line for clarity, PEP 8
-    compliance, and correctness against edge cases.
-  tools: [list_dir, read_file, write_file]
+    A creative writer who knows how to capture audience attention.
   allow_delegation: false
   verbose: true
 
-verify_agent:
-  role: >
-    Quality Assurance Engineer specializing in edge-case discovery.
-  goal: >
-    Confirm the implementation matches the plan and behaves correctly for
-    boundary inputs.
-  backstory: >
-    A rigorous QA specialist who trusts nothing until it survives the full
-    battery of adversarial inputs.
-  tools: [list_dir, read_file, write_file]
-  allow_delegation: false
-  verbose: true
-
-explore_task:
+research_task:
   description: >
-    Research approaches to generating a Fibonacci series in Python: naive
-    recursion, iteration with two running variables, memoization, and
-    generators. Compare time and space complexity. Use write_file to save
-    your findings and final recommendation to plan.md in the workspace.
+    Investigate and summarize the top AI trends.
   expected_output: >
-    Confirmation that plan.md was written, plus a single-line summary of
-    the recommended approach.
-  agent: explore_agent
+    A structured summary report of trends.
+  agent: researcher
+  async_execution: false
+  human_input: false
 
-build_task:
+blog_draft_task:
   description: >
-    Use list_dir to see the workspace contents, then use read_file to read
-    plan.md. Based on that plan, implement a Fibonacci function in Python
-    with type hints, a docstring, and an example call. Use write_file to
-    save the implementation to fib.py.
+    Write a comprehensive blog post based on the research.
   expected_output: >
-    Confirmation that fib.py was written, plus a single-line summary of
-    the implementation choice.
-  agent: build_agent
+    A 1000-word blog draft.
+  agent: content_creator
+  context:
+    - research_task
+  async_execution: true
+  human_input: false
 
-verify_task:
+social_media_task:
   description: >
-    Use list_dir to see the workspace contents, then use read_file to read
-    both plan.md and fib.py. Verify the code matches the plan and handles
-    edge cases (n=0, n=1, negative n, large n). Use write_file to save
-    your verdict and any issues to review.md.
+    Create 5 engaging tweets based on the research.
   expected_output: >
-    Confirmation that review.md was written, plus a PASS/FAIL verdict and
-    a one-line summary of issues found.
-  agent: verify_agent
+    A list of 5 tweets.
+  agent: content_creator
+  context:
+    - research_task
+  async_execution: true
+  human_input: false
+
+final_review_task:
+  description: >
+    Compile the blog and tweets into a final digest and await human approval.
+  expected_output: >
+    A combined content digest document.
+  agent: content_creator
+  context:
+    - blog_draft_task
+    - social_media_task
+  async_execution: false
+  human_input: true
 
 Generate the configuration for the following request:`;
 
